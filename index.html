@@ -1,0 +1,594 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Manager Dorm — All-in-One (Single file)</title>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#f4f6fb; --card:#fff; --muted:#6b7280; --accent:#1f6feb; --accent-2:#06b6d4; --success:#16a34a; --danger:#ef4444;
+      --radius:12px;
+    }
+    *{box-sizing:border-box;font-family:'Prompt',system-ui,Arial,sans-serif}
+    body{margin:0;background:var(--bg);color:#0f172a;padding:18px}
+    .app{max-width:1200px;margin:auto}
+    header{display:flex;align-items:center;gap:12px}
+    h1{margin:0;font-size:20px}
+    .top-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+    button{background:var(--accent);color:white;border:0;padding:8px 12px;border-radius:10px;cursor:pointer}
+    button.ghost{background:transparent;color:var(--accent);border:1px solid rgba(37,99,235,.12)}
+    .layout{display:grid;grid-template-columns:320px 1fr;gap:18px;margin-top:16px}
+    .panel{background:var(--card);padding:14px;border-radius:var(--radius);box-shadow:0 6px 18px rgba(12,20,40,.06)}
+    label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+    input,select,textarea{width:100%;padding:8px;border-radius:8px;border:1px solid #e6edf6}
+    .small{font-size:13px;color:var(--muted)}
+    .room-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+    .room-card{background:linear-gradient(180deg,#fff,#fbfdff);padding:12px;border-radius:12px;border:1px solid rgba(2,6,23,.04)}
+    .room-card h3{margin:0 0 6px}
+    .actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+    .muted{color:var(--muted)}
+    footer{margin-top:18px;text-align:center;color:var(--muted)}
+    .toast-wrap{position:fixed;right:20px;bottom:20px;z-index:9999;display:flex;flex-direction:column;gap:8px}
+    .toast{background:#111;color:white;padding:10px 12px;border-radius:10px;opacity:.95}
+    .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(2,6,23,.45);align-items:center;justify-content:center;padding:20px;z-index:999}
+    .modal{background:white;border-radius:12px;padding:16px;max-width:920px;width:100%;box-shadow:0 10px 30px rgba(2,6,23,.12);max-height:90vh;overflow:auto}
+    .qr-preview{width:200px;height:200px;border:1px dashed #e6edf6;display:flex;align-items:center;justify-content:center;background:#fff}
+    .logo-preview{width:72px;height:72px;border-radius:8px;object-fit:contain;background:#fff;border:1px solid #eee;padding:8px}
+    .header-row{display:flex;gap:12px;align-items:center}
+    .login-area{display:flex;gap:8px;align-items:center}
+    .linkish{background:transparent;border:0;color:var(--accent);cursor:pointer;padding:0}
+    .badge{display:inline-block;padding:6px 10px;border-radius:999px;background:#f1f5f9;font-size:13px}
+    @media (max-width:900px){ .layout{grid-template-columns:1fr} .header-row{flex-direction:column;align-items:flex-start} }
+    table.invoice{width:100%;border-collapse:collapse}
+    table.invoice td, table.invoice th{padding:8px;border-bottom:1px solid #eee}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="header-row">
+        <img id="logoSmall" src="" alt="logo" class="logo-preview" style="display:none">
+        <div>
+          <h1>Manager Dorm — ระบบค่าน้ำ/ไฟ (All-in-One)</h1>
+          <div class="small" id="subtitle">จัดการหอพัก, พิมพ์ใบแจ้งหนี้, QR, ส่งอีเมล</div>
+        </div>
+      </div>
+
+      <div class="top-actions">
+        <input id="globalSearch" placeholder="ค้นหาเลขห้อง / ชื่อ" style="padding:8px;border-radius:8px;border:1px solid #e6edf6" />
+        <div class="login-area">
+          <span id="currentUser" class="small muted">Guest</span>
+          <button id="loginBtn" class="ghost">Login</button>
+          <button id="logoutBtn" class="ghost" style="display:none">Logout</button>
+        </div>
+        <button id="openSettings">Settings</button>
+        <button id="backupBtn" class="ghost">Backup</button>
+        <button id="restoreBtn" class="ghost">Restore</button>
+        <button id="exportXls" class="ghost">Export Excel</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <!-- left: form -->
+      <aside class="panel">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div class="small">จัดการห้อง / เพิ่ม</div>
+            <div id="summary" class="small muted">0 ห้อง • 0 ค้างจ่าย</div>
+          </div>
+          <div class="small muted">Local storage</div>
+        </div>
+
+        <hr style="margin:12px 0;border:none;border-top:1px solid #eef2ff" />
+
+        <label>เพิ่ม / แก้ไข ห้อง (เลขห้อง - ชื่อ)</label>
+        <input id="roomId" type="hidden">
+        <input id="roomName" placeholder="101 - สมชาย" />
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+          <input id="elBefore" type="number" placeholder="มิเตอร์ไฟ ก่อน">
+          <input id="elAfter" type="number" placeholder="มิเตอร์ไฟ หลัง">
+          <input id="waBefore" type="number" placeholder="มิเตอร์น้ำ ก่อน">
+          <input id="waAfter" type="number" placeholder="มิเตอร์น้ำ หลัง">
+        </div>
+
+        <label style="margin-top:8px">ค่าบริการเพิ่มเติม</label>
+        <input id="feeInternet" placeholder="อินเทอร์เน็ต (บาท)">
+        <div style="display:flex;gap:8px">
+          <input id="feeClean" placeholder="ค่าทำความสะอาด">
+          <input id="feePark" placeholder="ค่าที่จอดรถ">
+        </div>
+
+        <label style="margin-top:8px">อีเมลผู้เช่า (สำหรับส่งใบแจ้งหนี้)</label>
+        <input id="roomEmail" placeholder="tenant@example.com">
+
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button id="saveRoomBtn">บันทึก</button>
+          <button id="clearForm" class="ghost">ล้างฟอร์ม</button>
+        </div>
+
+        <hr style="margin:12px 0;border:none;border-top:1px solid #eef2ff" />
+
+        <label>Filter / Month</label>
+        <select id="filterSelect">
+          <option value="all">ทั้งหมด</option>
+          <option value="paid">ชำระแล้ว</option>
+          <option value="unpaid">ยังไม่ชำระ</option>
+        </select>
+        <input id="monthPicker" type="month" style="margin-top:8px" />
+      </aside>
+
+      <!-- right: list + dashboard -->
+      <main>
+        <div class="panel">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <div>
+              <div class="small">รายการห้อง</div>
+              <div class="small muted">คลิกแก้ไข / ดาวน์โหลด PDF / แก้ไข QR / ส่งอีเมล</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button id="toggleTheme" class="ghost">Toggle Theme</button>
+              <button id="printAll" class="ghost">พิมพ์ทั้งหมด</button>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px">
+            <canvas id="summaryChart" style="max-width:360px;flex:0 0 360px"></canvas>
+            <div style="flex:1">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <div class="small">ยอดรวมเดือนนี้</div>
+                <div><strong id="monthTotal">0 ฿</strong></div>
+              </div>
+              <div style="margin-top:8px">
+                <div class="panel invoice-preview" id="quickPreview">เลือกห้องเพื่อดูตัวอย่างใบแจ้งหนี้</div>
+              </div>
+            </div>
+          </div>
+
+          <div id="roomList" class="room-list"></div>
+        </div>
+      </main>
+    </div>
+
+    <footer class="small">Manager Dorm • v1.0 • Single file • Run on GitHub Pages</footer>
+  </div>
+
+  <!-- toasts -->
+  <div id="toasts" class="toast-wrap"></div>
+
+  <!-- modal -->
+  <div id="modal" class="modal-backdrop"><div class="modal"></div></div>
+
+  <!-- libs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+
+  <script>
+/* ===========================================================
+  Manager Dorm — index.html (Single-file)
+  Features:
+  - Login (admin/tenant) with SHA-256 hashed passwords stored in localStorage
+  - Role-based UI (admin vs tenant)
+  - Settings (dorm info, rates, logo, default QR, EmailJS)
+  - CRUD rooms (metering, extra fees, email)
+  - QR per room: create (text -> QR) or upload image; download QR
+  - Invoice HTML + convert to PDF (html2canvas + jsPDF), embedded logo + QR
+  - Send invoice via EmailJS (PDF attached as datauri)
+  - Export Excel, Backup/Restore JSON
+  - Chart dashboard (Chart.js)
+  - Session timeout (15 minutes), logout
+  - Input validation & access control
+  =========================================================== */
+
+const LS_ROOMS = 'md.rooms.v5';
+const LS_SETTINGS = 'md.settings.v5';
+const LS_USERS = 'md.users.v5';
+let rooms = JSON.parse(localStorage.getItem(LS_ROOMS) || '[]');
+let settings = JSON.parse(localStorage.getItem(LS_SETTINGS) || JSON.stringify({
+  dormName: 'หอพักตัวอย่าง',
+  address: '',
+  phone: '',
+  rateElectric: 4.0,
+  rateWater: 20.0,
+  otherDefault: 0,
+  logoDataUrl: '',
+  defaultQrDataUrl: '',
+  emailjs_user: '',
+  emailjs_service: '',
+  emailjs_template: '',
+  ownerEmail: ''
+}));
+let users = JSON.parse(localStorage.getItem(LS_USERS) || '[]'); // {username,role,passwordHash}
+let currentUser = null;
+let sessionExpiry = null; // timestamp
+
+// helper: toast
+function toast(txt, t=2200){ const el = document.createElement('div'); el.className='toast'; el.textContent = txt; document.getElementById('toasts').appendChild(el); setTimeout(()=>el.remove(), t); }
+
+// save all to localStorage
+function saveAll(){ localStorage.setItem(LS_ROOMS, JSON.stringify(rooms)); localStorage.setItem(LS_SETTINGS, JSON.stringify(settings)); localStorage.setItem(LS_USERS, JSON.stringify(users)); }
+
+// SHA-256 hash (SubtleCrypto)
+async function sha256hex(str){
+  const enc = new TextEncoder();
+  const data = enc.encode(str);
+  const hashBuf = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hashBuf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+// Create default admin if no user
+(async function ensureAdmin(){
+  if(users.length === 0){
+    const defaultPass = 'admin123';
+    const h = await sha256hex(defaultPass);
+    users.push({username:'admin', role:'admin', passwordHash: h});
+    saveAll();
+    console.log('Default admin created -> username: admin password:', defaultPass);
+  }
+})();
+
+// apply settings to UI
+function applySettingsUI(){
+  document.getElementById('subtitle').textContent = settings.dormName + (settings.address? ' • ' + settings.address : '');
+  const logo = document.getElementById('logoSmall');
+  if(settings.logoDataUrl){ logo.src = settings.logoDataUrl; logo.style.display = 'block'; } else { logo.style.display = 'none'; }
+}
+applySettingsUI();
+
+// calculation
+function calcRoom(r){
+  const eUsage = (Number(r.elAfter)||0) - (Number(r.elBefore)||0);
+  const wUsage = (Number(r.waAfter)||0) - (Number(r.waBefore)||0);
+  const elec = Math.max(0, eUsage) * (settings.rateElectric||0);
+  const water = Math.max(0, wUsage) * (settings.rateWater||0);
+  const other = (Number(r.feeInternet)||0) + (Number(r.feeClean)||0) + (Number(r.feePark)||0) + (Number(r.other)||0) + (Number(settings.otherDefault)||0);
+  const total = Math.round((elec + water + other) * 100)/100;
+  return {eUsage, wUsage, elec, water, other, total};
+}
+
+// render rooms list
+const roomListEl = document.getElementById('roomList');
+function renderRooms(){
+  roomListEl.innerHTML = '';
+  const q = (document.getElementById('globalSearch').value||'').trim().toLowerCase();
+  const filter = document.getElementById('filterSelect').value;
+  let unpaid = 0, monthSum = 0;
+  rooms.forEach((r, i)=>{
+    if(q && !(r.name||'').toLowerCase().includes(q)) return;
+    const paid = r.paid===true || r.paid==='true';
+    if(filter==='paid' && !paid) return;
+    if(filter==='unpaid' && paid) return;
+    const c = calcRoom(r); monthSum += c.total; if(!paid) unpaid++;
+    const card = document.createElement('div'); card.className='room-card';
+    card.innerHTML = `<h3>${escapeHtml(r.name)}</h3>
+      <div class="small">ไฟ: ${c.eUsage} หน่วย (${c.elec} บ.) · น้ำ: ${c.wUsage} หน่วย (${c.water} บ.)</div>
+      <div class="muted small">อื่นๆ: ${c.other} บ. | <strong>รวม: ${c.total} บ.</strong></div>`;
+    const actions = document.createElement('div'); actions.className='actions';
+    // edit
+    const btnEdit = document.createElement('button'); btnEdit.className='ghost'; btnEdit.textContent='แก้ไข'; btnEdit.onclick = ()=>openEdit(i);
+    // pay toggle
+    const btnPay = document.createElement('button'); btnPay.textContent = paid? 'ยกเลิกชำระ' : 'จ่ายแล้ว'; btnPay.onclick = ()=>{ rooms[i].paid = !rooms[i].paid; saveAll(); renderRooms(); toast('อัปเดตสถานะ'); };
+    // PDF
+    const btnPdf = document.createElement('button'); btnPdf.textContent='ดาวน์โหลด PDF'; btnPdf.onclick = ()=>downloadPDF(i);
+    // Print
+    const btnPrint = document.createElement('button'); btnPrint.className='ghost'; btnPrint.textContent='พิมพ์'; btnPrint.onclick = ()=>printInvoice(i);
+    // QR editor (admin-only)
+    const btnQr = document.createElement('button'); btnQr.className='ghost'; btnQr.textContent='QR / แก้ไข'; btnQr.onclick = ()=>openQrModal(i);
+    // Email (admin-only)
+    const btnEmail = document.createElement('button'); btnEmail.className='ghost'; btnEmail.textContent='ส่งอีเมล'; btnEmail.onclick = ()=>sendEmailInvoice(i);
+    // XLS
+    const btnXls = document.createElement('button'); btnXls.className='ghost'; btnXls.textContent='Export XLS'; btnXls.onclick = ()=>exportSingleXLS(i);
+    // Delete (admin-only)
+    const btnDel = document.createElement('button'); btnDel.className='ghost'; btnDel.textContent='ลบ'; btnDel.onclick = ()=>{ if(confirm('ลบห้องจริงหรือ?')){ rooms.splice(i,1); saveAll(); renderRooms(); toast('ลบแล้ว'); } };
+
+    // permission control: only admin can send email, delete, edit QR
+    if(currentUser && currentUser.role === 'admin'){
+      [btnEdit, btnPay, btnPdf, btnPrint, btnQr, btnEmail, btnXls, btnDel].forEach(b=>actions.appendChild(b));
+    } else if(currentUser && currentUser.role === 'tenant'){
+      // tenant: can view, download pdf, print
+      [btnPdf, btnPrint].forEach(b=>actions.appendChild(b));
+      // show pay button if tenant is the owner of this room (by name match)
+      if(currentUser.username && r.name && r.name.toLowerCase().includes(currentUser.username.toLowerCase())){
+        actions.appendChild(btnPay);
+      }
+    } else {
+      // guest: only show limited actions
+      [btnPdf].forEach(b=>actions.appendChild(b));
+    }
+
+    card.appendChild(actions);
+    roomListEl.appendChild(card);
+  });
+
+  document.getElementById('summary').textContent = rooms.length + ' ห้อง • ' + unpaid + ' ค้างจ่าย';
+  document.getElementById('monthTotal').textContent = monthSum + ' ฿';
+  saveAll();
+  updateChart();
+  updateQuickPreview();
+}
+
+// add/edit room handlers
+document.getElementById('saveRoomBtn').addEventListener('click', ()=>{
+  // validation
+  if(!currentUser || currentUser.role !== 'admin'){
+    alert('เฉพาะผู้ดูแล (admin) เท่านั้นที่เพิ่ม/แก้ไขห้องได้');
+    return;
+  }
+  const id = document.getElementById('roomId').value;
+  const name = (document.getElementById('roomName').value||'').trim();
+  if(!name){ alert('กรุณากรอกเลขห้อง/ชื่อผู้เช่า'); return; }
+  const data = {
+    name,
+    elBefore: Number(document.getElementById('elBefore').value)||0,
+    elAfter: Number(document.getElementById('elAfter').value)||0,
+    waBefore: Number(document.getElementById('waBefore').value)||0,
+    waAfter: Number(document.getElementById('waAfter').value)||0,
+    feeInternet: Number(document.getElementById('feeInternet').value)||0,
+    feeClean: Number(document.getElementById('feeClean').value)||0,
+    feePark: Number(document.getElementById('feePark').value)||0,
+    other: 0,
+    email: document.getElementById('roomEmail').value||'',
+    paid: false,
+    createdAt: new Date().toISOString()
+  };
+  if(id !== ''){ rooms[Number(id)] = Object.assign(rooms[Number(id)], data); toast('แก้ไขห้องแล้ว'); }
+  else { rooms.push(data); toast('เพิ่มห้องเรียบร้อย'); }
+  saveAll(); clearForm(); renderRooms();
+});
+document.getElementById('clearForm').addEventListener('click', clearForm);
+function clearForm(){
+  ['roomId','roomName','elBefore','elAfter','waBefore','waAfter','feeInternet','feeClean','feePark','roomEmail'].forEach(id=>{
+    const el = document.getElementById(id); if(el) el.value = '';
+  });
+}
+function openEdit(i){
+  if(!currentUser || currentUser.role !== 'admin'){ alert('สิทธิ์เฉพาะ admin'); return; }
+  const r = rooms[i];
+  document.getElementById('roomId').value = i;
+  document.getElementById('roomName').value = r.name||'';
+  document.getElementById('elBefore').value = r.elBefore||0;
+  document.getElementById('elAfter').value = r.elAfter||0;
+  document.getElementById('waBefore').value = r.waBefore||0;
+  document.getElementById('waAfter').value = r.waAfter||0;
+  document.getElementById('feeInternet').value = r.feeInternet||0;
+  document.getElementById('feeClean').value = r.feeClean||0;
+  document.getElementById('feePark').value = r.feePark||0;
+  document.getElementById('roomEmail').value = r.email||'';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// settings modal
+document.getElementById('openSettings').addEventListener('click', ()=>openSettingsModal());
+function openSettingsModal(){
+  // only admin allowed to change settings
+  showModal(`
+    <h3>ตั้งค่าเบื้องต้น & Email</h3>
+    <label>ชื่อหอพัก</label><input id="s_name" value="${escapeHtml(settings.dormName||'')}" />
+    <label>ที่อยู่</label><input id="s_address" value="${escapeHtml(settings.address||'')}" />
+    <label>โทร</label><input id="s_phone" value="${escapeHtml(settings.phone||'')}" />
+    <label>ราคาค่าไฟ (บาท/หน่วย)</label><input id="s_rateE" type="number" value="${settings.rateElectric}" />
+    <label>ราคาค่าน้ำ (บาท/หน่วย)</label><input id="s_rateW" type="number" value="${settings.rateWater}" />
+    <label>ค่าอื่นๆ ต่อห้อง (บาท)</label><input id="s_other" type="number" value="${settings.otherDefault}" />
+    <label>โลโก้ (อัปโหลด)</label><input id="logoUpload" type="file" accept="image/*" />
+    <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+      <div class="small">โลโก้ตัวอย่าง</div>
+      <img id="logoPreview" src="${settings.logoDataUrl||''}" style="width:64px;height:64px;object-fit:contain;border:1px solid #eee;padding:6px;${settings.logoDataUrl?'display:block':'display:none'}">
+    </div>
+    <label style="margin-top:8px">Default QR (Upload or create below)</label><input id="qrUploadDefault" type="file" accept="image/*" />
+    <label>หรือพิมพ์ข้อความ/PromptPay string แล้วกด สร้าง QR</label>
+    <input id="qrTextDefault" value="" />
+    <div style="display:flex;gap:8px;margin-top:6px">
+      <button id="genQrDefault">สร้าง QR</button>
+      <button id="saveSettingsBtn" style="margin-left:auto">บันทึก</button>
+      <button id="closeModal" class="ghost">ยกเลิก</button>
+    </div>
+    <hr>
+    <h4>EmailJS (สำหรับส่งอีเมล)</h4>
+    <label>emailjs_user (User ID)</label><input id="s_euser" value="${settings.emailjs_user||''}" />
+    <label>emailjs_service</label><input id="s_eservice" value="${settings.emailjs_service||''}" />
+    <label>emailjs_template</label><input id="s_etemplate" value="${settings.emailjs_template||''}" />
+    <label>อีเมลเจ้าของ (from/to default)</label><input id="s_ownerEmail" value="${settings.ownerEmail||''}" />
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px"><button id="testEmailBtn" class="ghost">ทดสอบส่งอีเมล</button></div>
+    <hr>
+    <h4>จัดการผู้ใช้ (Admin)</h4>
+    <div class="small muted">สร้าง/ลบบัญชีผู้ใช้งาน (ค่าปรับปรุงผู้ใช้จะเก็บใน localStorage)</div>
+    <label>Username</label><input id="user_username" />
+    <label>Password</label><input id="user_password" type="password" />
+    <label>Role</label><select id="user_role"><option value="admin">admin</option><option value="tenant">tenant</option></select>
+    <div style="display:flex;gap:8px;margin-top:8px"><button id="createUserBtn">สร้างผู้ใช้</button><button id="listUsersBtn" class="ghost">ดูผู้ใช้</button></div>
+  `);
+
+  // handlers
+  document.getElementById('logoUpload').addEventListener('change', (e)=>{
+    const f = e.target.files[0]; if(!f) return;
+    const reader = new FileReader(); reader.onload = ()=>{ document.getElementById('logoPreview').src = reader.result; document.getElementById('logoPreview').style.display='block'; settings.logoDataUrl = reader.result; }; reader.readAsDataURL(f);
+  });
+  document.getElementById('qrUploadDefault').addEventListener('change', (e)=>{
+    const f = e.target.files[0]; if(!f) return;
+    const reader = new FileReader(); reader.onload = ()=>{ settings.defaultQrDataUrl = reader.result; toast('อัปโหลด QR เรียบร้อย'); }; reader.readAsDataURL(f);
+  });
+  document.getElementById('genQrDefault').addEventListener('click', ()=>{
+    const v = document.getElementById('qrTextDefault').value || '';
+    if(!v){ alert('กรุณากรอกข้อความสำหรับสร้าง QR'); return; }
+    const tmp = document.createElement('div'); new QRCode(tmp, {text: v, width:200, height:200});
+    setTimeout(()=>{ const img = tmp.querySelector('img'); if(img){ settings.defaultQrDataUrl = img.src; toast('สร้าง QR เรียบร้อย (ตั้งเป็นค่าเริ่มต้น)'); } tmp.remove(); }, 120);
+  });
+  document.getElementById('saveSettingsBtn').addEventListener('click', ()=>{
+    // only admin can save settings
+    if(!currentUser || currentUser.role !== 'admin'){ alert('เฉพาะ admin เท่านั้น'); return; }
+    settings.dormName = document.getElementById('s_name').value || settings.dormName;
+    settings.address = document.getElementById('s_address').value || settings.address;
+    settings.phone = document.getElementById('s_phone').value || settings.phone;
+    settings.rateElectric = Number(document.getElementById('s_rateE').value) || settings.rateElectric;
+    settings.rateWater = Number(document.getElementById('s_rateW').value) || settings.rateWater;
+    settings.otherDefault = Number(document.getElementById('s_other').value) || settings.otherDefault;
+    settings.emailjs_user = document.getElementById('s_euser').value || settings.emailjs_user;
+    settings.emailjs_service = document.getElementById('s_eservice').value || settings.emailjs_service;
+    settings.emailjs_template = document.getElementById('s_etemplate').value || settings.emailjs_template;
+    settings.ownerEmail = document.getElementById('s_ownerEmail').value || document.getElementById('s_ownerEmail')?.value || settings.ownerEmail;
+    saveAll(); applySettingsUI(); closeModal(); toast('บันทึกตั้งค่าเรียบร้อย'); renderRooms();
+  });
+  document.getElementById('testEmailBtn').addEventListener('click', async ()=>{
+    if(!settings.emailjs_user || !settings.emailjs_service || !settings.emailjs_template){ alert('กรุณากรอกข้อมูล EmailJS ก่อน'); return; }
+    try{ emailjs.init(settings.emailjs_user); await emailjs.send(settings.emailjs_service, settings.emailjs_template, { to_email: settings.ownerEmail || settings.emailjs_user, room: 'ทดสอบ', pdf: '' }); toast('ทดสอบส่งอีเมลสำเร็จ'); }catch(e){ console.error(e); alert('ทดสอบส่งอีเมลล้มเหลว ดู console'); }
+  });
+  document.getElementById('createUserBtn').addEventListener('click', async ()=>{
+    if(!currentUser || currentUser.role !== 'admin'){ alert('เฉพาะ admin'); return; }
+    const u = document.getElementById('user_username').value.trim();
+    const p = document.getElementById('user_password').value;
+    const role = document.getElementById('user_role').value;
+    if(!u || !p){ alert('กรอกข้อมูลให้ครบ'); return; }
+    const h = await sha256hex(p);
+    users.push({username: u, role, passwordHash: h});
+    saveAll(); toast('สร้างผู้ใช้ ' + u);
+  });
+  document.getElementById('listUsersBtn').addEventListener('click', ()=>{
+    const list = users.map(u => `${u.username} (${u.role})`).join('\\n');
+    alert('ผู้ใช้:\\n' + list);
+  });
+  // close
+  document.getElementById('closeModal')?.addEventListener('click', closeModal);
+}
+
+// modal helpers
+function showModal(html){
+  const m = document.getElementById('modal'); m.style.display='flex'; m.querySelector('.modal').innerHTML = html;
+  m.addEventListener('click', (ev)=>{ if(ev.target === m) closeModal(); });
+}
+function closeModal(){ const m = document.getElementById('modal'); m.style.display='none'; m.querySelector('.modal').innerHTML = ''; }
+
+// Invoice HTML builder
+function invoiceHtml(i){
+  const r = rooms[i];
+  const c = calcRoom(r);
+  const date = new Date().toLocaleDateString('th-TH');
+  const logo = settings.logoDataUrl? `<img src="${settings.logoDataUrl}" style="width:96px;height:96px;object-fit:contain;margin-right:12px">` : '';
+  const qrData = r.qrDataUrl || settings.defaultQrDataUrl || '';
+  const qrHtml = qrData? `<img src="${qrData}" style="width:140px;height:140px;object-fit:contain;border:1px solid #eee;padding:6px">` : '<div style="width:140px;height:140px;display:flex;align-items:center;justify-content:center;color:#999">ไม่มี QR</div>';
+  return `<!doctype html><html><head><meta charset="utf-8"><title>ใบแจ้งหนี้ ${escapeHtml(r.name)}</title>
+    <style>body{font-family:Prompt,Arial;color:#111;padding:18px} .muted{color:#6b7280} table{width:100%;border-collapse:collapse;margin-top:12px} td,th{padding:8px;border-bottom:1px solid #eee}</style>
+    </head><body>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="display:flex;align-items:center">
+          ${logo}
+          <div>
+            <div style="font-size:18px;font-weight:700">${escapeHtml(settings.dormName||'หอพัก')}</div>
+            <div class="muted">${escapeHtml(settings.address||'')}</div>
+            <div class="muted">โทร: ${escapeHtml(settings.phone||'')}</div>
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div class="muted">วันที่: ${escapeHtml(date)}</div>
+          <div style="font-weight:700">ใบแจ้งหนี้</div>
+        </div>
+      </div>
+      <hr>
+      <div><strong>เช่า/ห้อง:</strong> ${escapeHtml(r.name)}<br><strong>อีเมล:</strong> ${escapeHtml(r.email||'-')}</div>
+      <table>
+        <tr><td>ไฟ (${c.eUsage} หน่วย)</td><td style="text-align:right">${c.elec} ฿</td></tr>
+        <tr><td>น้ำ (${c.wUsage} หน่วย)</td><td style="text-align:right">${c.water} ฿</td></tr>
+        <tr><td>อินเทอร์เน็ต</td><td style="text-align:right">${r.feeInternet||0} ฿</td></tr>
+        <tr><td>ค่าทำความสะอาด</td><td style="text-align:right">${r.feeClean||0} ฿</td></tr>
+        <tr><td>ค่าที่จอดรถ</td><td style="text-align:right">${r.feePark||0} ฿</td></tr>
+        <tr><th>รวม</th><th style="text-align:right">${c.total} ฿</th></tr>
+      </table>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px">
+        <div><div class="muted">หมายเหตุ</div><div style="margin-top:6px">สถานะ: <strong>${r.paid? 'ชำระแล้ว':'ยังไม่ชำระ'}</strong></div></div>
+        <div style="text-align:center">${qrHtml}<div class="muted" style="margin-top:6px">สแกนเพื่อชำระ</div></div>
+      </div>
+    </body></html>`;
+}
+
+// print/pdf
+function printInvoice(i){ const w = window.open('','_blank'); w.document.write(invoiceHtml(i)); w.document.close(); w.focus(); }
+async function downloadPDF(i){
+  const html = invoiceHtml(i);
+  const wrapper = document.createElement('div'); wrapper.style.padding='12px'; wrapper.innerHTML = html;
+  document.body.appendChild(wrapper);
+  const canvas = await html2canvas(wrapper, {scale:2});
+  const imgData = canvas.toDataURL('image/png'); document.body.removeChild(wrapper);
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:'px',format:[canvas.width,canvas.height]});
+  doc.addImage(imgData,'PNG',0,0,canvas.width,canvas.height);
+  const filename = `Invoice_${(rooms[i].name||'room').replace(/\s+/g,'_')}.pdf`;
+  doc.save(filename); toast('ดาวน์โหลด PDF เรียบร้อย');
+}
+
+// QR editor modal per room
+function openQrModal(i){
+  if(!currentUser || currentUser.role !== 'admin'){ alert('เฉพาะ admin เท่านั้น'); return; }
+  const r = rooms[i] || {};
+  showModal(`
+    <h3>QR / แก้ไขสำหรับ ${escapeHtml(r.name||'')}</h3>
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="flex:1">
+        <div class="small">ข้อความสำหรับสร้าง QR</div><input id="qrTextRoom" value="${escapeHtml(r.qrText||'')}" />
+        <div style="display:flex;gap:8px;margin-top:8px"><button id="genQrRoom">สร้าง QR</button><button id="downloadQrRoom" class="ghost">ดาวน์โหลด QR</button></div>
+        <hr>
+        <div class="small">หรืออัปโหลดรูป QR (PNG/JPG)</div><input id="qrUploadRoom" type="file" accept="image/*" />
+        <div class="small muted" style="margin-top:8px">เมื่ออัปโหลดจะเก็บเป็นรูป QR ของห้องนี้</div>
+      </div>
+      <div>
+        <div class="qr-preview" id="qrPreviewRoom"></div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:12px"><button id="saveQrRoom" style="margin-right:8px">บันทึก</button><button id="closeModal" class="ghost">ยกเลิก</button></div>
+  `);
+  const preview = document.getElementById('qrPreviewRoom'); preview.innerHTML = '';
+  if(r.qrDataUrl) preview.innerHTML = `<img src="${r.qrDataUrl}" style="max-width:100%;max-height:100%;object-fit:contain">`;
+  else if(settings.defaultQrDataUrl) preview.innerHTML = `<img src="${settings.defaultQrDataUrl}" style="max-width:100%;max-height:100%;object-fit:contain">`;
+  else preview.textContent = 'ไม่มี QR';
+
+  document.getElementById('genQrRoom').addEventListener('click', ()=>{
+    const txt = document.getElementById('qrTextRoom').value || '';
+    if(!txt){ alert('กรุณากรอกข้อความสำหรับ QR'); return; }
+    const tmp = document.createElement('div'); new QRCode(tmp, {text: txt, width:200, height:200});
+    setTimeout(()=>{ const img = tmp.querySelector('img'); if(img){ preview.innerHTML = `<img src="${img.src}" style="max-width:100%;max-height:100%;object-fit:contain">`; } tmp.remove(); }, 120);
+    r.qrText = txt;
+  });
+
+  document.getElementById('qrUploadRoom').addEventListener('change', (e)=>{
+    const f = e.target.files[0]; if(!f) return;
+    const reader = new FileReader(); reader.onload = ()=>{ preview.innerHTML = `<img src="${reader.result}" style="max-width:100%;max-height:100%;object-fit:contain">`; r.qrDataUrl = reader.result; }; reader.readAsDataURL(f);
+  });
+
+  document.getElementById('downloadQrRoom').addEventListener('click', ()=>{
+    const img = preview.querySelector('img');
+    if(img){ const a = document.createElement('a'); a.href = img.src; a.download = `QR_${(r.name||'room').replace(/\s+/g,'_')}.png`; a.click(); toast('ดาวน์โหลด QR แล้ว'); }
+    else html2canvas(preview).then(canvas=>{ const a=document.createElement('a'); a.href=canvas.toDataURL('image/png'); a.download=`QR_${(r.name||'room').replace(/\s+/g,'_')}.png`; a.click(); toast('ดาวน์โหลด QR แล้ว'); });
+  });
+
+  document.getElementById('saveQrRoom').addEventListener('click', ()=>{
+    const img = preview.querySelector('img');
+    if(img) r.qrDataUrl = img.src;
+    rooms[i] = r; saveAll(); closeModal(); toast('บันทึก QR สำหรับ ' + r.name); renderRooms();
+  });
+}
+
+// export single XLS
+function exportSingleXLS(i){
+  const r = rooms[i]; const c = calcRoom(r);
+  const arr = [{รายการ:'ไฟ',จำนวน:c.elec},{รายการ:'น้ำ',จำนวน:c.water},{รายการ:'อื่นๆ',จำนวน:c.other},{รายการ:'รวม',จำนวน:c.total}];
+  const ws = XLSX.utils.json_to_sheet(arr); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Invoice'); XLSX.writeFile(wb, `Invoice_${(r.name||'room').replace(/\s+/g,'_')}.xlsx`);
+  toast('ดาวน์โหลด Excel แล้ว');
+}
+
+// export all
+document.getElementById('exportXls').addEventListener('click', ()=>{
+  const arr = rooms.map(r=>{ const c = calcRoom(r); return {room: r.name, electric:c.elec, water:c.water, other:c.other, total:c.total, email:r.email}; });
+  const ws = XLSX.utils.json_to_sheet(arr); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Rooms'); XLSX.writeFile(wb, 'Dorm_Export.xlsx'); toast('Export Excel เรียบร้อย');
+});
+
+// backup & restore
+document.getElementById('backupBtn').addEventListener('click', ()=>{
+  const data = { rooms, settings, users, createdAt: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'dorm-backup-'+new Date().toISOString().slice(0,10)+'.json'; a.click(); toast('ดาวน์โหลด Backup');
+});
+document.getElementById('restoreBtn').addEventListener('click', ()=>{
+  const inp = document.createElement('input'); inp.type='file'; inp.accept='application/json'; inp.onchange = ()=>{ const f = inp.files[0]; if(!f) return; const r = new FileReader(); r.onload = ()=>{ try{ const d = JSON.parse(r.result); if(Array.isArray(d.rooms)) rooms = d.rooms; if(d.settings) settings = d.settings; if(Array.isArray(d.users)) users = d.users; saveAll(); applySettingsUI(); renderRooms(); toast('กู้คืนข้อมูลสำเร็จ'); } catch(e){ alert('ไฟล์ไม่ถูกต้อง'); } };
